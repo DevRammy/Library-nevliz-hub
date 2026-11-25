@@ -1671,7 +1671,7 @@ local Components = Create("Folder", MainFrame, {
 			AnchorPoint = Vector2.new(0, 1),  
 			Position = UDim2.new(1, 5, 0.9),  
 			Text = WMiniText,  
-			TextColor3 = Theme["Color Dark Greem"],  
+			TextColor3 = Theme["Color Dark Text"],
 			BackgroundTransparency = 1,  
 			TextXAlignment = "Left",  
 			TextYAlignment = "Bottom",  
@@ -1680,6 +1680,98 @@ local Components = Create("Folder", MainFrame, {
 			Name = "SubTitle"  
 		}), "DarkText")  
 	}), "Text")  
+	
+	
+-- STATUS DO DONO NO DISCORD
+do
+	local OWNER_DISCORD_ID = "1307802034296197151"
+	local REFRESH_SECONDS = 30
+
+	-- Quais status contam como "online" (verde)
+	local ONLINE_STATUSES = {
+	online = true,
+	idle = true,
+	dnd = true,
+}
+
+	local COLOR_ONLINE = Color3.fromRGB(67, 220, 110)
+	local COLOR_OFFLINE = Color3.fromRGB(255, 70, 70)
+	local COLOR_UNKNOWN = Color3.fromRGB(120, 120, 120)
+
+	local SubTitleLabel = Title:FindFirstChild("SubTitle")
+
+	if SubTitleLabel then
+		-- Abre espaço à esquerda do subtítulo pro ponto
+		Create("UIPadding", SubTitleLabel, {
+			PaddingLeft = UDim.new(0, 11)
+		})
+
+		-- O padding empurra a origem dos filhos, por isso X negativo.
+		-- Se o ponto ficar alto/baixo demais, ajuste o -9 abaixo.
+		local StatusDot = Create("Frame", SubTitleLabel, {
+			Name = "OwnerStatus",
+			Size = UDim2.fromOffset(6, 6),
+			Position = UDim2.new(0, -10, 1, -9),
+			BackgroundColor3 = COLOR_UNKNOWN,
+			BorderSizePixel = 0
+		})
+		Make("Corner", StatusDot, UDim.new(0.5, 0))
+
+		local function Request(Url)
+			local Req = (syn and syn.request) or request or http_request
+				or (http and http.request)
+
+			if Req then
+				local Success, Response = pcall(Req, {Url = Url, Method = "GET"})
+
+				if Success and type(Response) == "table"
+					and Response.StatusCode == 200
+					and type(Response.Body) == "string" then
+
+					return Response.Body
+				end
+			end
+
+			local Success, Body = pcall(function()
+				return game:HttpGet(Url)
+			end)
+
+			if Success and type(Body) == "string" then
+				return Body
+			end
+
+			return nil
+		end
+
+		task.spawn(function()
+			while SubTitleLabel.Parent do
+				local Body = Request("https://api.lanyard.rest/v1/users/" .. OWNER_DISCORD_ID)
+
+				if Body then
+					local Success, Data = pcall(function()
+						return HttpService:JSONDecode(Body)
+					end)
+
+					if Success and type(Data) == "table"
+						and Data.success == true
+						and type(Data.data) == "table" then
+
+						local Online = ONLINE_STATUSES[Data.data.discord_status] == true
+
+						CreateTween({
+							StatusDot,
+							"BackgroundColor3",
+							Online and COLOR_ONLINE or COLOR_OFFLINE,
+							0.3
+						})
+					end
+				end
+
+				task.wait(REFRESH_SECONDS)
+			end
+		end)
+	end
+end
 	  
 	local MainScroll = InsertTheme(Create("ScrollingFrame", Components, {  
 		Size = UDim2.new(0, redzlib.Save.TabSize, 1, -TopBar.Size.Y.Offset),  
@@ -3269,6 +3361,114 @@ function Tab:AddDiscordInvite(Configs)
 	  
 	return DiscordInvite  
 end  
+
+function Tab:AddImage(Configs)
+	if type(Configs) ~= "table" then Configs = {Configs} end
+
+	local ImageValue = Configs[1] or Configs.Image or Configs.Icon or ""
+	local Height = Configs[2] or Configs.Height or 120
+	local Caption = Configs.Title or Configs.Name or Configs.Caption or ""
+	local ScaleSetting = Configs.ScaleType or "Crop"
+	local Radius = Configs.Corner or 8
+	local Clickable = Configs[3] or Configs.Callback
+	local Callback = Funcs:GetCallback(Configs, 3)
+
+	-- Aceita número, "123", "rbxassetid://123", link rbxthumb ou nome de ícone
+	local function ResolveImage(Value)
+		if type(Value) == "number" then
+			return "rbxassetid://" .. Value
+		elseif type(Value) == "string" then
+			if tonumber(Value) then
+				return "rbxassetid://" .. Value
+			elseif Value:find("://") then
+				return Value
+			end
+		end
+		return redzlib:GetIcon(Value)
+	end
+
+	local ScaleType = Enum.ScaleType.Crop
+	if typeof(ScaleSetting) == "EnumItem" then
+		ScaleType = ScaleSetting
+	else
+		local Success, Result = pcall(function()
+			return Enum.ScaleType[ScaleSetting]
+		end)
+		if Success and Result then ScaleType = Result end
+	end
+
+	-- Name = "Option" mantém a ordem igual aos outros elementos da aba
+	local Holder = InsertTheme(Create("Frame", Container, {
+		Name = "Option",
+		Size = UDim2.new(1, 0, 0, Height),
+		BackgroundColor3 = Theme["Color Hub 2"],
+		ClipsDescendants = true
+	}), "Frame")
+	Make("Corner", Holder, UDim.new(0, Radius))
+	Make("Stroke", Holder)
+
+	local Picture = Create("ImageButton", Holder, {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Image = ResolveImage(ImageValue),
+		ScaleType = ScaleType,
+		AutoButtonColor = false
+	})
+	Make("Corner", Picture, UDim.new(0, Radius))
+
+	-- Legenda opcional (pílula escura embaixo)
+	if type(Caption) == "string" and Caption ~= "" then
+		local Bar = Create("Frame", Holder, {
+			Size = UDim2.new(1, -12, 0, 20),
+			Position = UDim2.new(0.5, 0, 1, -6),
+			AnchorPoint = Vector2.new(0.5, 1),
+			BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+			BackgroundTransparency = 0.4,
+			BorderSizePixel = 0
+		})
+		Make("Corner", Bar, UDim.new(0, 6))
+
+		Create("TextLabel", Bar, {
+			Size = UDim2.new(1, -16, 1, 0),
+			Position = UDim2.fromOffset(8, 0),
+			BackgroundTransparency = 1,
+			Text = Caption,
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			Font = Enum.Font.GothamBold,
+			TextSize = 10,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd
+		})
+	end
+
+	-- Só vira clicável (com som) se você passou um Callback
+	if Clickable then
+		Picture.Activated:Connect(function()
+			PlayClick()
+			Funcs:FireCallback(Callback)
+		end)
+	end
+
+	local ImageObj = {}
+	function ImageObj:Visible(Bool)
+		if Bool == nil then
+			Holder.Visible = not Holder.Visible
+		else
+			Holder.Visible = Bool
+		end
+	end
+	function ImageObj:Destroy() Holder:Destroy() end
+	function ImageObj:Callback(...) Funcs:InsertCallback(Callback, ...) end
+	function ImageObj:Set(NewImage, NewHeight)
+		if NewImage ~= nil then
+			Picture.Image = ResolveImage(NewImage)
+		end
+		if type(NewHeight) == "number" then
+			Holder.Size = UDim2.new(1, 0, 0, NewHeight)
+		end
+	end
+	return ImageObj
+end
 		return Tab  
 	end  
 	  
